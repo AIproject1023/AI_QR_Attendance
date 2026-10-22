@@ -1,38 +1,34 @@
-import qrcode, cv2, csv
+
+import streamlit as st
+import qrcode, csv, os
+from PIL import Image
+import zxingcpp
 from sklearn.tree import DecisionTreeClassifier
 
-roll = input("Enter roll number: ")
-qrcode.make(roll).save("student.png")
+st.title("AI QR Attendance")
 
-# Scan QR code
-cam = cv2.VideoCapture(0)
-detector = cv2.QRCodeDetector()
+roll = st.text_input("Roll Number")
+if st.button("Generate QR") and roll:
+    qr = qrcode.make(roll)
+    st.image(qr)
+    qr.save("student.png")
 
-while True:
-    ok, img = cam.read()
-    if not ok:
-        break
-    data, _, _ = detector.detectAndDecode(img)
-    cv2.imshow("Scan QR", img)
-    if data:
-        cam.release()
-        cv2.destroyAllWindows()
-        break
-    if cv2.waitKey(1) == 27:
-        cam.release()
-        cv2.destroyAllWindows()
-        raise SystemExit
+img = st.file_uploader("Upload QR", type=["png", "jpg", "jpeg"])
+if img and st.button("Mark Attendance"):
+    codes = zxingcpp.read_barcodes(Image.open(img).convert("RGB"))
+    if codes:
+        with open("attendance.csv", "a", newline="") as f:
+            csv.writer(f).writerow([codes[0].text, "Present"])
+        st.success("Attendance marked!")
 
-# Save attendance
-with open("attendance.csv", "a", newline="") as f:
-    csv.writer(f).writerow([data, "Present"])
+ai = DecisionTreeClassifier()
+ai.fit([[90], [80], [60], [40]], [0, 0, 1, 1])
+p = st.number_input("Attendance %", 0, 100, 75)
 
-# Simple machine learning model
-model = DecisionTreeClassifier()
-model.fit([[90], [80], [60], [40]], [0, 0, 1, 1])
+if st.button("AI Prediction"):
+    st.write("Low attendance risk" if ai.predict([[p]])[0] else "Attendance OK")
 
-attendance = int(input("Attendance percentage: "))
-result = model.predict([[attendance]])[0]
+if os.path.exists("attendance.csv"):
+    st.write("Attendance Records")
+    st.dataframe(__import__("pandas").read_csv("attendance.csv", header=None))
 
-print("Attendance marked for:", data)
-print("AI prediction:", "Low attendance risk" if result == 1 else "Attendance OK")
